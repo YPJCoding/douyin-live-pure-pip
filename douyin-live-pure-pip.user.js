@@ -2,7 +2,7 @@
 // @name         抖音直播纯净 PiP
 // @name:en      Douyin Live Pure PiP
 // @namespace    https://github.com/YPJCoding/douyin-live-pure-pip
-// @version      0.3.0
+// @version      0.3.1
 // @description  将抖音直播移入纯净 Document PiP 窗口，并尽量保持直播持续播放。
 // @description:en Move Douyin Live into a clean Document Picture-in-Picture window and keep playback active.
 // @author       YPJCoding
