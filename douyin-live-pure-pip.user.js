@@ -68,6 +68,7 @@
   installVisibilityGuard(window);
 
   function init() {
+    // 抖音是 SPA，脚本可能因为页面恢复或管理器重载重复执行；按钮存在就不重复初始化。
     if (document.getElementById(BUTTON_ID)) {
       return;
     }
@@ -104,8 +105,10 @@
     });
 
     document.body.appendChild(button);
+    // 主页面先应用纯净样式，用户即使不打开 PiP 也能获得较干净的直播页面。
     addPureLiveStyles(document);
 
+    // 主页面的 watcher 持续存在；PiP 内的 watcher 会随 PiP 关闭单独清理。
     if (!cleanupMainAutoPauseGuard) {
       cleanupMainAutoPauseGuard = installAutoPauseGuard(document);
     }
@@ -133,6 +136,7 @@
     }
 
     const restorePoint = createRestorePoint(target);
+    // 基于目标元素当前比例请求 PiP 尺寸，避免固定比例裁切直播画面。
     const pipSize = getPipSize(target);
 
     let pipWindow;
@@ -161,6 +165,7 @@
     pipWindow.addEventListener(
       "pagehide",
       () => {
+        // pagehide 是 Document PiP 关闭时最可靠的恢复点。
         if (restoreElement) {
           restoreElement();
           restoreElement = null;
@@ -188,6 +193,7 @@
   function restoreTarget(element, restorePoint) {
     const { parent, previousSibling, nextSibling } = restorePoint;
 
+    // 优先根据相邻节点恢复；如果相邻节点已被页面重渲染移除，再退回 append 到原父节点。
     if (previousSibling && previousSibling.parentNode) {
       previousSibling.after(element);
       return;
@@ -209,6 +215,7 @@
     const height = rect.height || window.innerHeight || 500;
     const aspectRatio = width / height || 1;
 
+    // 保持原比例，把较长边限制在 720，避免初次打开 PiP 请求过大的窗口。
     if (width >= height) {
       const pipWidth = Math.min(width, MAX_PIP_WIDTH);
       return {
@@ -267,6 +274,7 @@
   }
 
   function getRelevantStyleText(element) {
+    // 只复制根元素上会影响整体观感的样式，避免把页面布局约束强行带进 PiP。
     const styles = window.getComputedStyle(element);
     const properties = [
       "background-color",
@@ -289,6 +297,7 @@
   function getInheritedBackgroundColor(element) {
     let current = element;
 
+    // 目标元素背景透明时向父级寻找真实背景色，防止 PiP body 变成默认白底。
     while (current) {
       const backgroundColor = window.getComputedStyle(current).backgroundColor;
       if (
@@ -309,6 +318,7 @@
   }
 
   function addPureLiveStyles(rootDocument) {
+    // 同一个 document 只注入一次，避免 PiP 多次打开时累积重复 style。
     if (rootDocument.getElementById(PURE_LIVE_STYLE_ID)) {
       return;
     }
@@ -321,6 +331,7 @@
 
   function installVisibilityGuard(targetWindow) {
     try {
+      // @grant none 下脚本运行在页面上下文，覆盖原型能影响站点自己的可见性读取。
       Object.defineProperty(targetWindow.Document.prototype, "hidden", {
         configurable: true,
         get: () => false,
@@ -347,6 +358,7 @@
 
     let isChecking = false;
     const check = () => {
+      // MutationObserver 和定时器可能同时触发，简单加锁避免重复处理同一个弹窗。
       if (isChecking) {
         return;
       }
@@ -389,6 +401,7 @@
       subtree: true,
     });
 
+    // 定时器是兜底：有些弹窗可能不是通过 childList 变化触发，或 observer 错过了时机。
     const timerId = rootWindow.setInterval(check, 3000);
     check();
 
@@ -425,6 +438,7 @@
   }
 
   function findClickableClose(node) {
+    // PiP 里的 HTMLElement 属于 pipWindow，不能用主窗口的 HTMLElement 做 instanceof。
     const nodeWindow = node.ownerDocument.defaultView || window;
     const clickables = Array.from(
       node.querySelectorAll(
@@ -456,6 +470,7 @@
   }
 
   function resumeVideos(rootDocument) {
+    // 关闭弹窗后补一次 play；失败通常是浏览器策略或播放器状态限制，静默忽略。
     rootDocument.querySelectorAll("video").forEach((video) => {
       if (!video.paused) {
         return;
@@ -498,6 +513,7 @@
     };
 
     const observeControl = (control) => {
+      // 如果控件已经存在就立即尝试；否则监听控件内部挂载清晰度菜单。
       if (!control || trySwitchQuality()) {
         return;
       }
@@ -535,6 +551,7 @@
     observeControl(existingControl);
 
     if (!existingControl) {
+      // 控制栏可能晚于脚本加载出现，所以先监听 documentElement 等待它挂载。
       const rootObserver = new rootWindow.MutationObserver(() => {
         const control = rootDocument.querySelector(
           ".douyin-player-controls-right",
@@ -554,6 +571,7 @@
       disconnectors.push(() => rootObserver.disconnect());
     }
 
+    // 自动清晰度只需要在页面加载或 PiP 打开后的短时间内尝试，避免长期 observer。
     const timeoutId = rootWindow.setTimeout(() => {
       disconnectors.splice(0).forEach((disconnect) => disconnect());
     }, 10000);
@@ -564,6 +582,7 @@
     };
   }
 
+  // document-start 时 body 可能还不存在；等 DOMContentLoaded 后再挂按钮和 DOM watcher。
   if (document.body) {
     init();
   } else {
