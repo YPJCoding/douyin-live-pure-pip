@@ -23,8 +23,10 @@
   const TARGET_SELECTOR = ".pip-anchor";
   const BUTTON_ID = "__douyin-live-pure-pip-button";
   const PURE_LIVE_STYLE_ID = "__douyin-live-pure-pip-style";
+  // Document PiP 的宽高只是浏览器建议值，实际窗口大小可能被浏览器限制或记忆。
   const MAX_PIP_WIDTH = 720;
   const MAX_PIP_HEIGHT = 720;
+  // 纯净样式来自 pure-live 的抖音直播思路：隐藏干扰层，只保留直播主体。
   const PURE_LIVE_CSS = `
     #douyin-navigation,
     #douyin-header,
@@ -62,6 +64,7 @@
   let cleanupMainAutoHighestQuality = null;
   let cleanupPipAutoHighestQuality = null;
 
+  // 尽早伪装页面始终可见，减少抖音基于 hidden/visibilityState 的暂停判断。
   installVisibilityGuard(window);
 
   function init() {
@@ -143,11 +146,13 @@
     activePipWindow = pipWindow;
     restoreElement = () => restoreTarget(target, restorePoint);
 
+    // PiP 是独立的 document/window，防暂停和画质逻辑需要在 PiP 内再装一份。
     installVisibilityGuard(pipWindow);
     cleanupPipAutoPauseGuard?.();
     cleanupPipAutoPauseGuard = installAutoPauseGuard(pipWindow.document);
 
     preparePipDocument(pipWindow.document, target);
+    // 这里移动的是真实 DOM 节点，不是 clone；关闭 PiP 时会按 restorePoint 放回原位置。
     pipWindow.document.body.appendChild(target);
     cleanupPipAutoHighestQuality?.();
     cleanupPipAutoHighestQuality = installAutoHighestQuality(pipWindow.document);
@@ -172,6 +177,7 @@
   }
 
   function createRestorePoint(element) {
+    // 保存相邻节点比只保存 parent 更稳，能尽量恢复到原来的 DOM 顺序。
     return {
       parent: element.parentElement,
       previousSibling: element.previousSibling,
@@ -219,6 +225,7 @@
   }
 
   function preparePipDocument(pipDocument, target) {
+    // PiP 文档不继承原页面样式，需要复制样式表并补上 html/body 的关键样式。
     copyStyleSheets(document, pipDocument);
     addPureLiveStyles(pipDocument);
 
@@ -244,6 +251,7 @@
         style.textContent = rules;
         targetDocument.head.appendChild(style);
       } catch (_error) {
+        // 跨域 stylesheet 不能读 cssRules，退回到 link 标签引用原样式地址。
         if (!styleSheet.href) {
           continue;
         }
@@ -357,6 +365,7 @@
             continue;
           }
 
+          // 先尝试点击继续/关闭按钮；找不到按钮时再移除弹窗节点兜底。
           const clickable = findClickableClose(node);
           if (clickable) {
             clickable.click();
@@ -390,6 +399,7 @@
   }
 
   function getPauseDialogCandidates(rootDocument) {
+    // 抖音暂停提示可能挂在不同容器里，这里只扫常见弹窗/提示区域，避免遍历全页面。
     const selectors = [
       "body > div[elementtiming='element-timing']",
       'body > div:not([id="root"]):not(:empty)',
@@ -482,6 +492,7 @@
       }
 
       qualityOption.click();
+      // 当前抖音清晰度列表第一个通常是“原画”；如果站点改顺序，只需要改上面的 selector。
       switched = true;
       return true;
     };
